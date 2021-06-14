@@ -41,6 +41,9 @@
     
   }
   
+  score_tbl <- score_tbl %>% 
+    mutate(reveal_lite = Reveal_lite2_3_cat)
+  
   
 # functions ----
   
@@ -435,8 +438,65 @@
     
   }
   
+  calculate_reveal_lite <- function(WHOFc, SMWD, NTproBNP, eGFR, SBP, HR, ...) {
+    
+    ## calculated REVEAL Lite
+    
+    WHOFc_strat <- cut(WHOFc, 
+                       c(-1, 1.5, 2.5, 3.5, 5), 
+                       c(-1, 0, 1, 2)) %>% 
+      as.character %>% 
+      as.numeric
+    
+    SMWD_strat <- cut(SMWD, 
+                      c(-1, 165, 320, 440, 10000), 
+                      c(1, 0, -1, -2), 
+                      right = F) %>% 
+      as.character %>% 
+      as.numeric
+    
+    NTproBNP_strat <- cut(NTproBNP, 
+                          c(-1, 300, 1100, 300000), 
+                          c(-2, 0, 2), 
+                          right = F) %>% 
+      as.character %>% 
+      as.numeric
+    
+    eGFR_strat <- ifelse(eGFR < 60, 1, 0)
+    
+    SBP_strat <- ifelse(SBP < 110, 1, 0) 
+    
+    HR_strat <- ifelse(HR > 96, 1, 0)
+    
+    
+    inp_tbl <- tibble(reveal_lite_score = WHOFc_strat + 
+                        SMWD_strat + 
+                        NTproBNP_strat + 
+                        eGFR_strat + 
+                        SBP_strat + 
+                        HR_strat + 6) %>% 
+      mutate(reveal_lite = cut(reveal_lite_score, 
+                                      c(-1, 5.5, 7.5, 16), 
+                                      c(1, 2, 3)) %>% 
+               as.character %>% 
+               as.numeric)
+    
+    risk <- calculate_risk(inp_data = inp_tbl, 
+                           inp_model = glm_models$reveal_lite, 
+                           type = 'response', 
+                           se.fit = T)
+    
+    return(risk_stats_tbl(score_val = inp_tbl$reveal_lite_score, 
+                          risk_class = cut(inp_tbl$reveal_lite, 
+                                           c(-1, 1.5, 2.5, 10), 
+                                           c('Low', 'Intermediate', 'High')), 
+                          predict_res = risk))
+    
+    
+  }
+  
   make_input_tbl <- function(PatientID = '', Gender, Hb, mPAP, SO2_RL, age_fc, RAA, WHOFc, SMWD, 
-                             NTproBNP, mRAP, cardiac_index, SvO2, pericardial_effusion) {
+                             NTproBNP, mRAP, cardiac_index, SvO2, pericardial_effusion, eGFR, SBP, HR) {
     
     ## makes a table with input parameters
     
@@ -445,11 +505,14 @@
                                           'Age', 
                                           'Six Minute Walking Distance, m', 
                                           'WHO Functional Class', 
+                                          'Systolic Blood Pressure, mmHg', 
+                                          'Heart Rate, bpm', 
                                           'Paricardial Effusion', 
                                           'Right Atrial Area, sq. cm', 
                                           'NT-proBNP, pg/mL', 
                                           'Blood Hemoglobin, g/LL', 
                                           'Oxygen Saturation, %', 
+                                          'eGFR, mL/min/1.73 sq m', 
                                           'Mixed Venous Oxygen Saturation, %', 
                                           'Cardiac Index', 
                                           'Mean Right Atrial Pressure, mmHg', 
@@ -459,11 +522,14 @@
                                          age_fc, 
                                          SMWD,
                                          car::recode(as.character(WHOFc), "'1' = 'I'; '2' = 'II'; '3' = 'III'; '4' = 'IV'"), 
+                                         SBP, 
+                                         HR, 
                                          pericardial_effusion, 
                                          RAA, 
                                          NTproBNP, 
                                          Hb, 
                                          SO2_RL, 
+                                         eGFR, 
                                          SvO2, 
                                          cardiac_index, 
                                          mRAP, 
@@ -477,7 +543,7 @@
   }
   
   make_score_tbl <- function(Gender, Hb, mPAP, SO2_RL, age_fc, RAA, WHOFc, SMWD, 
-                             NTproBNP, mRAP, cardiac_index, SvO2, pericardial_effusion) {
+                             NTproBNP, mRAP, cardiac_index, SvO2, pericardial_effusion, eGFR, SBP, HR) {
     
     ## makes a table with score values, risk catagories and predicted 5-year mortality
     ## for the two experimental scores (signature 10967 and Sonnweber Enhanced French)
@@ -492,7 +558,8 @@
                           FRENCH4p = calculate_french4p, 
                           SPAHR = calculate_spahr, 
                           Compera = calculate_compera, 
-                          mRASP = calculate_mrasp) %>% 
+                          mRASP = calculate_mrasp, 
+                          reveal_lite = calculate_reveal_lite) %>% 
       map(function(x) x(Gender = Gender, 
                         Hb = Hb, 
                         mPAP = mPAP, 
@@ -506,7 +573,10 @@
                         cardiac_index = cardiac_index, 
                         SvO2 = SvO2, 
                         pericardial_effusion = pericardial_effusion, 
-                        FRENCH3p = FRENCH3p$score))
+                        FRENCH3p = FRENCH3p$score, 
+                        eGFR = eGFR, 
+                        SBP = SBP, 
+                        HR = HR))
     
     res_tbl <- other_results %>% 
       c(list(FRENCH3p = FRENCH3p))
@@ -564,9 +634,9 @@
     
     theme_1 <- ttheme_minimal(core = list(fg_params = list(hjust = as.vector(just_mtx), 
                                                            x = as.vector(x_mtx), 
-                                                           fontsize = 10, 
+                                                           fontsize = 9, 
                                                            fontface = 'plain')),
-                              colhead = list(fg_params = list(fontsize = 10, 
+                              colhead = list(fg_params = list(fontsize = 9, 
                                                               fontface = 'bold', 
                                                               hjust = as.vector(hj), 
                                                               x = as.vector(x)), 
@@ -616,9 +686,9 @@
     
     theme_1 <- ttheme_minimal(core = list(fg_params = list(hjust = as.vector(just_mtx), 
                                                            x = as.vector(x_mtx), 
-                                                           fontsize = 10, 
+                                                           fontsize = 9, 
                                                            fontface = 'plain')),
-                              colhead = list(fg_params = list(fontsize = 10, 
+                              colhead = list(fg_params = list(fontsize = 9, 
                                                               fontface = 'bold', 
                                                               hjust = as.vector(hj), 
                                                               x = as.vector(x)), 
@@ -633,25 +703,31 @@
     
     report <- list()
     
-    report$banner <- plot_grid(ggdraw() + 
-                                 draw_image('./www/mui_logo.png'), 
-                               nrow = 1) + 
-      theme(plot.margin = margin(l = 3, r = 3, t = 2, b = 2, unit = 'mm'))
+    banner <- plot_grid(ggdraw() + 
+                          draw_image('./www/mui_logo.png'), 
+                        nrow = 1)
     
     report$title_panel <- plot_grid(ggdraw() + 
                                       draw_text('PAH Risk Assessment Tools', 
-                                                size = 16, 
+                                                size = 14, 
                                                 fontface = 'bold', 
-                                                color = '#800000'), 
+                                                color = '#800000', 
+                                                x = 0.05, 
+                                                hjust = 0), 
                                     ggdraw() + 
                                       draw_text('Score Calulation and Risk Prediction Summary', 
-                                                size = 14),  
+                                                size = 12, 
+                                                x = 0.05, 
+                                                hjust = 0),  
                                     ncol = 1, 
-                                    rel_heights = c(1, 1))
+                                    rel_heights = c(1, 1)) %>% 
+      plot_grid(.,
+                banner, 
+                rel_widths = c(1, 0.7))
     
     report$inp_paramaters <- plot_grid(ggdraw() + 
                                          draw_text('Input parameters', 
-                                                   size = 12, 
+                                                   size = 11, 
                                                    fontface = 'bold', 
                                                    x = 0.05, 
                                                    hjust = 0), 
@@ -664,7 +740,7 @@
     
     report$summ_table <- plot_grid(ggdraw() + 
                                      draw_text('Score values and predicted 5-year mortality risk', 
-                                               size = 12, 
+                                               size = 11, 
                                                fontface = 'bold', 
                                                x = 0.05, 
                                                hjust = 0), 
@@ -674,7 +750,7 @@
                                                hjust = 0), 
                                    ggdraw() + 
                                      draw_text(proj_globs$method_text, 
-                                               size = 10, 
+                                               size = 9, 
                                                x = 0.05, 
                                                hjust = 0), 
                                    ncol = 1, 
@@ -682,26 +758,43 @@
     
     report$references <- plot_grid(ggdraw() + 
                                      draw_text('References', 
-                                               size = 12, 
+                                               size = 11, 
                                                fontface = 'bold', 
                                                x = 0.05, 
                                                hjust = 0), 
                                    ggdraw() + 
                                      draw_text(paste(proj_globs$score_citations_lite, 
                                                      collapse = '\n'), 
-                                               size = 10, 
+                                               size = 9, 
                                                x = 0.05, 
                                                hjust = 0), 
                                    ncol = 1, 
                                    rel_heights = c(0.05, 1))
     
     
-    report_file <- plot_grid(plotlist = report %>% 
-                               map(function(x) x + 
-                                     theme(plot.margin = margin(t = 3, l = 5, r = 5, b = 3, unit = 'mm'))), 
+    report_file <- plot_grid(report$title_panel + 
+                               theme(plot.margin = margin(t = 15, 
+                                                          l = 10, 
+                                                          r = 10, 
+                                                          b = 3, unit = 'mm')), 
+                             report$inp_paramaters + 
+                               theme(plot.margin = margin(t = 3, 
+                                                          l = 10, 
+                                                          r = 10, 
+                                                          b = 3, unit = 'mm')), 
+                             report$summ_table + 
+                               theme(plot.margin = margin(t = 3, 
+                                                          l = 10, 
+                                                          r = 10, 
+                                                          b = 3, unit = 'mm')), 
+                             report$references + 
+                               theme(plot.margin = margin(t = 3, 
+                                                          l = 10, 
+                                                          r = 10, 
+                                                          b = 15, unit = 'mm')), 
                              ncol = 1, 
-                             rel_heights = c(0.5, 0.7, 3.9, 3, 1.6))
-    
+                             rel_heights = c(1, 4.1, 2.8, 1.7))
+
     ggsave(plot = report_file, 
            filename = path_to_save, 
            width = 210, 
@@ -994,7 +1087,8 @@
                              FRENCH4p = 'FPHR4p', 
                              SPAHR = 'SPAHR', 
                              Compera = 'Compera', 
-                             mRASP = 'mRASP')
+                             mRASP = 'mRASP', 
+                             reveal_lite = 'REVEAL 2.0 Lite')
   
   proj_globs$score_refs <- c(model_10967 = '', 
                              enh_french = '1', 
@@ -1002,19 +1096,22 @@
                              FRENCH4p = '2', 
                              SPAHR = '3', 
                              Compera = '4', 
-                             mRASP = '5')
+                             mRASP = '5', 
+                             reveal_lite = '6')
   
   proj_globs$score_citations <- c('1' = '1. Sonnweber, T., et al. (2021). Risk assessment in precapillary pulmonary hypertension: a comparative analysis. Respir. Res. 22. doi:10.1186/s12931-021-01624-z.', 
                                   '2' = '2. Boucly, A., et al. (2017). Risk assessment, prognosis and guideline implementation in pulmonary arterial hypertension. Eur. Respir. J. 50, 1700889. doi:10.1183/13993003.00889-2017.', 
                                   '3' = '3. Kylhammar, D., et al. (2018). A comprehensive risk stratification at early follow-up determines prognosis in pulmonary arterial hypertension. Eur. Heart J. 39, 4175-4181. doi:10.1093/eurheartj/ehx257.', 
                                   '4' = '4. Hoeper, M., et al. (2017). Mortality in pulmonary arterial hypertension: Prediction by the 2015 European pulmonary hypertension guidelines risk stratification model. Eur. Respir. J. 50, 1700740. doi:10.1183/13993003.00740-2017.', 
-                                  '5' = '5. Xiong, W., et al. (2018). A modified risk score in one-year survival rate assessment of group 1 pulmonary arterial hypertension. BMC Pulm. Med. 18. doi:10.1186/s12890-018-0712-7.')
+                                  '5' = '5. Xiong, W., et al. (2018). A modified risk score in one-year survival rate assessment of group 1 pulmonary arterial hypertension. BMC Pulm. Med. 18. doi:10.1186/s12890-018-0712-7.', 
+                                  '6' = '6. Benza, R. L., et.al. (2021). Development and Validation of an Abridged Version of the REVEAL 2.0 Risk Score Calculator, REVEAL Lite 2, for Use in Patients With Pulmonary Arterial Hypertension. Chest 159, 337-346. doi:10.1016/j.chest.2020.08.2069.')
   
   proj_globs$score_citations_lite <- c('1' = '1. Sonnweber, T., et al. (2021). doi:10.1186/s12931-021-01624-z.', 
                                        '2' = '2. Boucly, A., et al. (2017). doi:10.1183/13993003.00889-2017.', 
                                        '3' = '3. Kylhammar, D., et al. (2018). doi:10.1093/eurheartj/ehx257.', 
                                        '4' = '4. Hoeper, M., et al. (2017). doi:10.1183/13993003.00740-2017.', 
-                                       '5' = '5. Xiong, W., et al. (2018).  doi:10.1186/s12890-018-0712-7.')
+                                       '5' = '5. Xiong, W., et al. (2018). doi:10.1186/s12890-018-0712-7.', 
+                                       '6' = '6. Benza, R. L., et.al. (2021). doi:10.1016/j.chest.2020.08.2069.')
   
   proj_globs$method_text <- paste('The 5-year mortality risk was estimated by logistic regression in a cohort of', 
                                   nrow(score_tbl), 
@@ -1035,22 +1132,10 @@
                      FRENCH4p = death_acute ~ FRENCH4p, 
                      Compera = death_acute ~ Compera, 
                      SPAHR = death_acute ~ SPAHR, 
-                     mRASP = death_acute ~ mRASP) %>% 
+                     mRASP = death_acute ~ mRASP, 
+                     reveal_lite = death_acute ~ reveal_lite) %>% 
     map(glm, 
         family = 'binomial', 
         data = score_tbl)
   
-# development -----
-  
-  test_record <- score_tbl[6, ]
-  
-  test_record2 <- score_tbl[3, ]
-
-  
-  plot_mod_results(score_val = test_record2$model_10967, risk_scale = 'model_10967')
-  
-  plot_score_event(risk_scale = 'SPAHR', 
-                   score_val = 1, 
-                   strata_breaks = c(0, 1, 2, 4))
-  
-  
+# END ---

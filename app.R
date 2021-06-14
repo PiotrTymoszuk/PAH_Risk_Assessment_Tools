@@ -116,6 +116,16 @@
                                             'III' = 3, 
                                             'IV' = 4)), 
                    hr(), 
+                   h4('Vital Signs'), 
+                   numericInput(inputId = 'sbp', 
+                                label = 'Systolic Blood Pressure, mmHg', 
+                                value = 120, 
+                                min = 0, max = 250), 
+                   numericInput(inputId = 'hr', 
+                                label = 'Heart Rate, bpm', 
+                                value = 80, 
+                                min = 0, max = 250), 
+                   hr(), 
                    h4('Ultrasound'), 
                    radioButtons(inputId = 'perricard', 
                                 label = 'Paricardial Effusion', 
@@ -139,6 +149,10 @@
                                 label = 'Oxygen Saturation, %', 
                                 value = 100, 
                                 min = 0, max = 100), 
+                   numericInput(inputId = 'egfr', 
+                                label = 'Estimated Glomerular Filtration Rate, mL/min/1.73 sq m', 
+                                value = 90, 
+                                min = 0, max = 300), 
                    hr(), 
                    h4('Cardiopulmonary variables'), 
                    numericInput(inputId = 'SvO2', 
@@ -171,8 +185,9 @@
                                 as well as seminal papers describing the development of the respecitive scoring tools 
                                 (Boucly, A., et al. (2017). doi:10.1183/13993003.00889−2017, 
                                 Kylhammar, D., et al. (2018). doi:10.1093/eurheartj/ehx257, 
-                                Hoeper, M., et al. (2017). doi:10.1183/13993003.00740−2017 
-                                and Xiong, W., et al. (2018). doi:10.1186/s12890−018−0712−7).'), 
+                                Hoeper, M., et al. (2017). doi:10.1183/13993003.00740−2017, 
+                                Xiong, W., et al. (2018). doi:10.1186/s12890−018−0712−7)
+                                and Benza, R. L., et.al. (2021). doi:10.1016/j.chest.2020.08.2069.'), 
                               br(), 
                               p(proj_globs$method_text), 
                               br(), 
@@ -355,7 +370,28 @@
                                 width = '65%', 
                                 height = '500px'), 
                      br(), 
-                     p('5-year mortality in the study cohort stratified by mRASP risk classes'))
+                     p('5-year mortality in the study cohort stratified by mRASP risk classes')), 
+            tabPanel('REVEAL 2.0 Lite', 
+                     h3('REVEAL 2.0 Lite and study cohort mortality risk'), 
+                     br(), 
+                     h4('Modeling of the 5-year mortality risk'), 
+                     hr(), 
+                     plotOutput('reveal_lite_model', 
+                                width = '65%', 
+                                height = '200px'), 
+                     br(), 
+                     p('5-year mortality risk was modeled by logistic regression. 
+                     Risk estimate with 95% confidence interval is shown, dashed line represents 
+                     the 5-year mortality in the modeling data set. The limits of the 5-year risk 
+                       mortality classes were defined as described by Kylhammar, D., et al. (2018). doi:10.1093/eurheartj/ehx257'), 
+                     br(), 
+                     h4('Real-life 5-year mortality'), 
+                     hr(), 
+                     plotOutput('reveal_lite_prev', 
+                                width = '65%', 
+                                height = '500px'), 
+                     br(), 
+                     p('5-year mortality in the study cohort stratified by REVEAL 2.0 Lite risk classes'))
          ), width = 9
       )
       
@@ -383,7 +419,10 @@
                      mRAP = input$mRAP, 
                      cardiac_index = input$card_index, 
                      SvO2 = input$SvO2, 
-                     pericardial_effusion = input$perricard)
+                     pericardial_effusion = input$perricard, 
+                     eGFR = input$egfr, 
+                     SBP = input$sbp, 
+                     HR = input$hr)
       
       
     })
@@ -413,7 +452,10 @@
                      mRAP = input$mRAP, 
                      cardiac_index = input$card_index, 
                      SvO2 = input$SvO2, 
-                     pericardial_effusion = input$perricard)
+                     pericardial_effusion = input$perricard, 
+                     eGFR = input$egfr, 
+                     SBP = input$sbp, 
+                     HR = input$hr)
       
     })
     
@@ -706,7 +748,7 @@
       
     })
     
-    ## Compera graphics
+    ## mRASP graphics
     
     mrasp_plots <- reactive({
       
@@ -750,6 +792,53 @@
       mrasp_plots()$prevalence
       
     })
+    
+    ## REVEAL graphics
+    
+    reveal_lite_plots <- reactive({
+      
+      score_val <- calculate_reveal_lite(WHOFc = as.numeric(input$who_fc), 
+                                         SMWD = input$smwd, 
+                                         NTproBNP = input$nt_pro_bnp, 
+                                         eGFR = input$egfr, 
+                                         SBP = input$sbp, 
+                                         HR = input$sbp)
+      
+      reveal_lite_class = cut(score_val$score, 
+                        c(-1, 1.5, 2.5, 10), 
+                        c(1, 2, 3)) %>% 
+        as.character %>% 
+        as.numeric
+      
+      forest_plot <- plot_mod_results(score_val = reveal_lite_class, 
+                                      risk_scale = 'reveal_lite', 
+                                      fontsize = 4) + 
+        theme(plot.title = element_blank(), 
+              plot.subtitle = element_blank())
+      
+      prev_plot <- plot_score_event(risk_scale = 'reveal_lite', 
+                                    score_val = reveal_lite_class, 
+                                    strata_breaks = c(-1, 1.5, 2.5, 3.5), 
+                                    strata_labels = c('low', 'intermediate', 'high'), 
+                                    x_lab = 'REVEAL 2.0 Lite, risk class') + 
+        expand_limits(y = 65)
+      
+      return(list(forest = forest_plot, 
+                  prevalence = prev_plot))
+      
+    })
+    
+    output$reveal_lite_model <- renderPlot({
+      
+      reveal_lite_plots()$forest
+      
+    })
+    
+    output$reveal_lite_prev <- renderPlot({
+      
+      reveal_lite_plots()$prevalence
+      
+    })
    
    ## download report
    
@@ -779,6 +868,3 @@
 # Run the app ----
 
   shinyApp(ui = ui, server = server)
-  
-  
-  
