@@ -1,0 +1,13 @@
+name: pah_risk_tools
+title: pah_risk_tools
+username:
+account: im2-ibk
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 4246870
+bundleId: 5119857
+url: https://im2-ibk.shinyapps.io/pah_risk_tools/
+when: 1633724175.13257
+lastSyncTime: 1633724175.13257
+asMultiple: FALSE
+asStatic: FALSE

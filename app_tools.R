@@ -40,11 +40,7 @@
                      silent = T) ## if run standalone
     
   }
-  
-  score_tbl <- score_tbl %>% 
-    mutate(reveal_lite = Reveal_lite2_3_cat)
-  
-  
+
 # functions ----
   
   ## general functions
@@ -102,40 +98,39 @@
     
   }
   
-  calculate_model_10967 <- function(Gender, Hb, mPAP, SO2_RL, ...) {
+  calculate_sign2525 <- function(Gender, age_fc, cardiac_index, mPAP, score_only = F, ...) {
     
     ## calculates the model_10967 score (HR from the respective Cox model)
     ## and the predicted 5-year mortality with 95% CI obtained from normal distribution
     
-    inp_data <- tibble(Gender = Gender, 
-                       Hb = Hb, 
-                       mPAP = mPAP, 
-                       SO2_RL = SO2_RL)
+    age_strat <- ifelse(age_fc > 60, 2.1009330, 0)
     
-    ## survival object
-    
-    surv_obj <- create_surv(inp_table = score_tbl, 
-                            time_variable = 'Survival_time_from_FD_months', 
-                            event_variable = 'death_study')
-    
-    ## Cox model
-    
-    cox_model <- coxph(surv_obj ~ Gender + Hb + mPAP + SO2_RL, 
-                       data = score_tbl)
+    Gender_strat <- ifelse(Gender == 'female', -0.7506657, 0)
 
-    inp_data <- inp_data %>% 
-      mutate(model_10967 = calculate_risk(inp_data = inp_data, 
-                                          inp_model = cox_model, 
-                                          type = 'risk'))
+    mPAP_strat <- ifelse(mPAP >= 49, 0.9143866, 0)
 
-    risk <- calculate_risk(inp_data = inp_data, 
-                           inp_model = glm_models$model_10967, 
+    ci_strat <- cut(cardiac_index, 
+                    c(-Inf, 2, 2.5, Inf), 
+                    c(0, -0.8219363, -1.2468615)) %>% 
+      as.character %>% 
+      as.numeric
+    
+    inp_tbl <- tibble(sign2525 = Gender_strat + age_strat + ci_strat + mPAP_strat)
+    
+    if(score_only) {
+      
+      return(inp_tbl$sign2525)
+      
+    }
+    
+    risk <- calculate_risk(inp_data = inp_tbl, 
+                           inp_model = glm_models$sign2525, 
                            type = 'response', 
                            se.fit = T)
     
-    return(return(risk_stats_tbl(score_val = inp_data$model_10967, 
-                                 risk_class = NA, 
-                                 predict_res = risk)))
+    return(risk_stats_tbl(score_val = inp_tbl$sign2525, 
+                          risk_class = NA, 
+                          predict_res = risk))
     
   }
   
@@ -495,7 +490,7 @@
     
   }
   
-  make_input_tbl <- function(PatientID = '', Gender, Hb, mPAP, SO2_RL, age_fc, RAA, WHOFc, SMWD, 
+  make_input_tbl <- function(PatientID = '', Gender, mPAP, age_fc, RAA, WHOFc, SMWD, 
                              NTproBNP, mRAP, cardiac_index, SvO2, pericardial_effusion, eGFR, SBP, HR) {
     
     ## makes a table with input parameters
@@ -510,8 +505,6 @@
                                           'Paricardial Effusion', 
                                           'Right Atrial Area, sq. cm', 
                                           'NT-proBNP, pg/mL', 
-                                          'Blood Hemoglobin, g/LL', 
-                                          'Oxygen Saturation, %', 
                                           'eGFR, mL/min/1.73 sq m', 
                                           'Mixed Venous Oxygen Saturation, %', 
                                           'Cardiac Index', 
@@ -527,8 +520,6 @@
                                          pericardial_effusion, 
                                          RAA, 
                                          NTproBNP, 
-                                         Hb, 
-                                         SO2_RL, 
                                          eGFR, 
                                          SvO2, 
                                          cardiac_index, 
@@ -542,18 +533,18 @@
     
   }
   
-  make_score_tbl <- function(Gender, Hb, mPAP, SO2_RL, age_fc, RAA, WHOFc, SMWD, 
+  make_score_tbl <- function(Gender, mPAP, age_fc, RAA, WHOFc, SMWD, 
                              NTproBNP, mRAP, cardiac_index, SvO2, pericardial_effusion, eGFR, SBP, HR) {
     
-    ## makes a table with score values, risk catagories and predicted 5-year mortality
-    ## for the two experimental scores (signature 10967 and Sonnweber Enhanced French)
+    ## makes a table with score values, risk categories and predicted 5-year mortality
+    ## for the two experimental scores (signature 2525 and Sonnweber Enhanced French)
     ## French3p, 4p, SAPHR, COMPERA and mRASP
     
     FRENCH3p <- calculate_french3p(WHOFc = WHOFc, 
                                    SMWD = SMWD, 
                                    NTproBNP = NTproBNP)
 
-    other_results <- list(model_10967 = calculate_model_10967, 
+    other_results <- list(sign2525 = calculate_sign2525, 
                           enh_french = calculate_enh_french, 
                           FRENCH4p = calculate_french4p, 
                           SPAHR = calculate_spahr, 
@@ -561,9 +552,7 @@
                           mRASP = calculate_mrasp, 
                           reveal_lite = calculate_reveal_lite) %>% 
       map(function(x) x(Gender = Gender, 
-                        Hb = Hb, 
                         mPAP = mPAP, 
-                        SO2_RL = SO2_RL, 
                         age_fc = age_fc, 
                         RAA = RAA, 
                         WHOFc = WHOFc, 
@@ -1081,7 +1070,7 @@
   
   ## score names, references and plotting colors
   
-  proj_globs$score_labs <- c(model_10967 = 'Signature #10967', 
+  proj_globs$score_labs <- c(sign2525 = 'Signature #2525', 
                              enh_french = 'Age/RAA-enhanced FPHR3p', 
                              FRENCH3p = 'FPHR3p', 
                              FRENCH4p = 'FPHR4p', 
@@ -1115,7 +1104,7 @@
   
   proj_globs$method_text <- paste('The 5-year mortality risk was estimated by logistic regression in a cohort of', 
                                   nrow(score_tbl), 
-                                  'PAH/CTEPH patients\nrecruited by Innsbruck, Linz and Vienna PAH reference centers as described by Sonnweber et al. (pending).')
+                                  'PAH patients\nrecruited by Innsbruck, Linz and Vienna PAH reference centers as described by Sonnweber et al. (pending).')
   
   ## study prevalence of 5-year deaths
   
@@ -1126,7 +1115,17 @@
   
 # creating a series of logistic models for 5-year mortality, one for each risk scale ------
   
-  glm_models <- list(model_10967 = death_acute ~ model_10967, 
+  
+  score_tbl <- score_tbl %>% 
+    mutate(reveal_lite = Reveal_lite2_3_cat)
+  
+  score_tbl$sign2525 <- calculate_sign2525(Gender = score_tbl$Gender, 
+                                           age_fc = score_tbl$age_fc, 
+                                           cardiac_index = score_tbl$cardiac_index, 
+                                           mPAP = score_tbl$mPAP, 
+                                           score_only = T)
+  
+  glm_models <- list(sign2525 = death_acute ~ sign2525, 
                      french_enh = death_acute ~ french_enh, 
                      FRENCH3p = death_acute ~ FRENCH3p, 
                      FRENCH4p = death_acute ~ FRENCH4p, 

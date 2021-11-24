@@ -1,8 +1,8 @@
 # This script provides the interface and server functions for an web app
 # for calculation of the following risk scores: French3p, French4p, mRASP, Compera, 
-# SPAHR, Sonnweber enhanced FPHR3p and #10967 signature
+# SPAHR, Sonnweber enhanced FPHR3p and #2525 signature
 # In the scores and risk categories for the established risk scales are returned
-# For the experimental tools (Sonnweber Score and #10967), only the points 
+# For the experimental tools (Sonnweber Score and #2525), only the points 
 # and study data are displayed.
 # Study data to present: modeled risk of overall mortality by Cox (HR) and 5-year mortality by GLM (OR)
 # 5-year mortality in the score strata.
@@ -107,7 +107,7 @@
                    h4('Performance'), 
                    numericInput(inputId = 'smwd', 
                                 label = 'Six Minute Walkig Distance, m', 
-                                value = 440, 
+                                value = 500, 
                                 min = 0, max = 10000), 
                    radioButtons(inputId = 'who_fc', 
                                 label = 'WHO Functional Class', 
@@ -123,7 +123,7 @@
                                 min = 0, max = 250), 
                    numericInput(inputId = 'hr', 
                                 label = 'Heart Rate, bpm', 
-                                value = 80, 
+                                value = 70, 
                                 min = 0, max = 250), 
                    hr(), 
                    h4('Ultrasound'), 
@@ -133,7 +133,7 @@
                                             'Present' = 'yes')), 
                    numericInput(inputId = 'raa', 
                                 label = 'Right Atrial Area, sq. cm', 
-                                value = 16, 
+                                value = 15, 
                                 min = 0, max = 40), 
                    hr(), 
                    h4('Blood Laboratory Parameters'), 
@@ -141,14 +141,6 @@
                                 label = 'NT-proBNP, pg/mL', 
                                 value = 50, 
                                 min = 0, max = 30000), 
-                   numericInput(inputId = 'Hb', 
-                                label = 'Blood Hemoglobin, g/L', 
-                                value = 140, 
-                                min = 40, max = 200), 
-                   numericInput(inputId = 'SO2_RL', 
-                                label = 'Oxygen Saturation, %', 
-                                value = 100, 
-                                min = 0, max = 100), 
                    numericInput(inputId = 'egfr', 
                                 label = 'Estimated Glomerular Filtration Rate, mL/min/1.73 sq m', 
                                 value = 90, 
@@ -161,16 +153,16 @@
                                 min = 0, max = 100),
                    numericInput(inputId = 'card_index', 
                                 label = 'Cardiac Index', 
-                                value = 2.6, 
+                                value = 3.5, 
                                 min = 0, 
                                 max = 5), 
                    numericInput(inputId = 'mRAP', 
                                 label = 'Mean Right Atrial Pressure, mmHg', 
-                                value = 7, 
+                                value = 5, 
                                 min = 0, max = 40), 
                    numericInput(inputId = 'mPAP', 
                                 label = 'Mean Pulmonary Artherial Pressure, mmHg', 
-                                value = 65, 
+                                value = 14, 
                                 min = 0, max = 150), 
                    width = 3),
       
@@ -224,12 +216,12 @@
                      hr(), 
                      downloadButton('downloadReport', 
                                     label = 'Download report')), 
-            tabPanel('Signature #10967', 
-                     h3('Signature #10967 and study cohort mortality risk'), 
+            tabPanel('Signature #2525', 
+                     h3('Signature #2525 and study cohort mortality risk'), 
                      br(), 
                      h4('Modeling of the 5-year mortality risk'), 
                      hr(), 
-                     plotOutput('model_10967_model', 
+                     plotOutput('sign2525_model', 
                                 width = '80%', 
                                 height = '200px'), 
                      br(), 
@@ -240,11 +232,11 @@
                      br(), 
                      h4('Real-life 5-year mortality'), 
                      hr(), 
-                     plotOutput('model_10967_prev', 
+                     plotOutput('sign2525_prev', 
                                 width = '65%', 
                                 height = '500px'), 
                      br(), 
-                     p('5-year mortality in the study cohort stratified by quantiles of the Signature #10967 score.')), 
+                     p('5-year mortality in the study cohort stratified by quantiles of the Signature #2525 score.')), 
             tabPanel('Enhanced FPHR3p', 
                      h3('Age/RAA-enhanced FPHR3p and study cohort mortality risk'), 
                      br(), 
@@ -408,9 +400,7 @@
       
       make_input_tbl(PatientID = input$pat_ID, 
                      Gender = input$sex, 
-                     Hb = input$Hb, 
                      mPAP = input$mPAP, 
-                     SO2_RL = input$SO2_RL, 
                      age_fc = input$age, 
                      RAA = input$raa, 
                      WHOFc = as.numeric(input$who_fc), 
@@ -441,9 +431,7 @@
       ## in the pooled cohort
       
       make_score_tbl(Gender = input$sex, 
-                     Hb = input$Hb, 
                      mPAP = input$mPAP, 
-                     SO2_RL = input$SO2_RL, 
                      age_fc = input$age, 
                      RAA = input$raa, 
                      WHOFc = as.numeric(input$who_fc), 
@@ -500,30 +488,26 @@
       
     })
     
-    ## model_10967 graphics
+    ## Signature 2525 graphics
     
-    model_10967_plots <- reactive({
+    sign2525_plots <- reactive({
       
-      score_val <- calculate_model_10967(Gender = input$sex, 
-                                         Hb = input$Hb, 
-                                         mPAP = input$mPAP, 
-                                         SO2_RL = input$SO2_RL)
+      score_val <- calculate_sign2525(Gender = input$sex, 
+                                      age_fc = input$age, 
+                                      cardiac_index = input$card_index, 
+                                      mPAP = input$mPAP)
       
       forest_plot <- plot_mod_results(score_val = score_val$score, 
-                                      risk_scale = 'model_10967', 
+                                      risk_scale = 'sign2525', 
                                       fontsize = 4) + 
         theme(plot.title = element_blank(), 
               plot.subtitle = element_blank())
       
-      prev_plot <- plot_score_event(risk_scale = 'model_10967', 
+      prev_plot <- plot_score_event(risk_scale = 'sign2525', 
                                     score_val = score_val$score, 
-                                    strata_breaks = quantile(score_tbl$model_10967, 
-                                                             c(0, 0.25, 0.5, 0.75, 1), 
-                                                             na.rm = T)) + 
-        scale_x_discrete(limits = levels(cut(score_tbl$model_10967, 
-                                             quantile(score_tbl$model_10967, 
-                                                      c(0, 0.25, 0.5, 0.75, 1), 
-                                                      na.rm = T), 
+                                    strata_breaks = c(-2, -0.75, 0.16, 1.35, 3.05)) + 
+        scale_x_discrete(limits = levels(cut(score_tbl$sign2525, 
+                                             c(-2, -0.75, 0.16, 1.35, 3.05), 
                                              include.lowest = T))) + 
         expand_limits(y = 65)
       
@@ -532,15 +516,15 @@
       
     })
     
-    output$model_10967_model <- renderPlot({
+    output$sign2525_model <- renderPlot({
       
-      model_10967_plots()$forest
+      sign2525_plots()$forest
       
     })
     
-    output$model_10967_prev <- renderPlot({
+    output$sign2525_prev <- renderPlot({
       
-      model_10967_plots()$prevalence
+      sign2525_plots()$prevalence
       
     })
     
@@ -805,8 +789,8 @@
                                          HR = input$sbp)
       
       reveal_lite_class = cut(score_val$score, 
-                        c(-1, 1.5, 2.5, 10), 
-                        c(1, 2, 3)) %>% 
+                              c(-1, 5.5, 7.5, 16), 
+                              c(1, 2, 3)) %>% 
         as.character %>% 
         as.numeric
       
